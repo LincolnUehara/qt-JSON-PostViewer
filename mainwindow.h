@@ -31,10 +31,12 @@ private:
     int postCounter;
 
     void enablePostFields(void);
+    void disablePostFields(void);
     void disableAllFields(void);
+    void resetAllVariables(void);
     void sendNetworkRequest(const char * urlString);
 
-    Ui::MainWindow *ui;
+    Ui::MainWindow * ui;
     QUrl url;
     QNetworkRequest networkRequest;
     QNetworkAccessManager * networkManager;

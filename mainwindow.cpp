@@ -2,6 +2,7 @@
 #include "ui_mainwindow.h"
 
 #define CONNECTION_TIMEOUT 2000 /* 2 sec */
+#define TIMER_POLLING 200 /* 200 msec */
 
 QColor colorBasic(0,0,0), colorSuccess(0,0,255), colorWarning(255,156,0), colorError(255,0,0);
 
@@ -26,7 +27,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     /* "Sync" Button */
     ui->pbSync->setEnabled(true);
-    ui->pbSync->setToolTip(tr("Update the users field"));
+    ui->pbSync->setToolTip(tr("Sync to JSONPlaceholder"));
     connect(ui->pbSync, SIGNAL (released()), this, SLOT (syncUsers()));
 
     /* "Previous" Button */
@@ -40,20 +41,16 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->pbNext, SIGNAL (released()), this, SLOT (checkNext()));
 
     /* "Users" Field */
-    /* Unfortunately it was not possible to connect to a signal from List View */
+    /* Unfortunately, for now it was not possible to connect to any signal from List View */
     model = new QStringListModel();
     ui->lvUsers->setSelectionMode(QAbstractItemView::SingleSelection);
     timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(checkSelection()));
-    timer->start(200);
+    timer->start(TIMER_POLLING);
 
-    /* Set used variables */
+    /* Set fields and variables */
     disableAllFields();
-    connected = false;
-    userId = -1; /* No user selected */
-    userCounter = 0;
-    postCounter = 0;
-    runningState = _RS_IDLE;
+    resetAllVariables();
 }
 
 MainWindow::~MainWindow()
@@ -93,6 +90,7 @@ void MainWindow::replyFinished(QNetworkReply * reply)
                 if( userId == jsonObject["userId"].toInt()){
                     ui->tbPostTitle->setText(jsonObject["title"].toString());
                     ui->tbPostBody->setText(jsonObject["body"].toString());
+                    runningState = _RS_IDLE;
                 }else{
                     checkNext();
                 }
@@ -104,15 +102,21 @@ void MainWindow::replyFinished(QNetworkReply * reply)
                 if( userId == jsonObject["userId"].toInt()){
                     ui->tbPostTitle->setText(jsonObject["title"].toString());
                     ui->tbPostBody->setText(jsonObject["body"].toString());
+                    runningState = _RS_IDLE;
                 }else{
                     checkPrevious();
                 }
             }
             break;
 
-        //default :
+        case _RS_IDLE :
+        default :
+            runningState = _RS_IDLE;
         }
-    }else if(reply->error() == QNetworkReply::ContentNotFoundError){
+    }
+
+    /* If there is no more users, previous or next message */
+    else if(reply->error() == QNetworkReply::ContentNotFoundError){
         std::string message;
 
         switch(runningState) {
@@ -124,23 +128,32 @@ void MainWindow::replyFinished(QNetworkReply * reply)
             message += " users.";
             ui->tbGeneralMessage->append(message.c_str());
             ui->lvUsers->setEnabled(true);
+            disablePostFields();
             userCounter = 0;
+            runningState = _RS_IDLE;
             break;
 
         case _RS_CHECK_NEXT :
         case _RS_CHECK_PREVIOUS :
             ui->tbGeneralMessage->setTextColor(colorWarning);
             ui->tbGeneralMessage->append("There is no more messages from this user!");
+            runningState = _RS_IDLE;
             break;
 
-        //default :
+        case _RS_IDLE :
+        default :
+            runningState = _RS_IDLE;
         }
-    }else{
+    }
+    /* If the internet connection is off or it was given timeout */
+    else{
         if (connected == true){
             connected = false;
             ui->tbGeneralMessage->setTextColor(colorError);
             ui->tbGeneralMessage->append("Error to connect!");
             disableAllFields();
+            resetAllVariables();
+            runningState = _RS_IDLE;
         }
         networkManager->clearAccessCache();
     }
@@ -150,6 +163,12 @@ void MainWindow::replyFinished(QNetworkReply * reply)
 
 void MainWindow::syncUsers(void)
 {
+    if(!list.isEmpty() && runningState == _RS_IDLE){
+        list.clear();
+        userId = -1; /* No user selected */
+        ui->tbPostTitle->clear();
+        ui->tbPostBody->clear();
+    }
     runningState = _RS_SYNC_USERS;
     std::string userFullPath = userUrl;
     userFullPath += QString::number(userCounter + 1).toStdString();
@@ -174,6 +193,7 @@ void MainWindow::checkPrevious(void)
     if(postCounter == 0){
         ui->tbGeneralMessage->setTextColor(colorWarning);
         ui->tbGeneralMessage->append("This is the first message!");
+        runningState = _RS_IDLE;
         return;
     }
     runningState = _RS_CHECK_PREVIOUS;
@@ -206,6 +226,14 @@ void MainWindow::enablePostFields(void)
     ui->tbPostBody->setEnabled(true);
 }
 
+void MainWindow::disablePostFields(void)
+{
+    ui->pbPrevious->setEnabled(false);
+    ui->pbNext->setEnabled(false);
+    ui->tbPostTitle->setEnabled(false);
+    ui->tbPostBody->setEnabled(false);
+}
+
 void MainWindow::disableAllFields(void)
 {
     ui->lvUsers->setEnabled(false);
@@ -213,6 +241,15 @@ void MainWindow::disableAllFields(void)
     ui->pbNext->setEnabled(false);
     ui->tbPostTitle->setEnabled(false);
     ui->tbPostBody->setEnabled(false);
+}
+
+void MainWindow::resetAllVariables(void)
+{
+    connected = false;
+    userId = -1; /* No user selected */
+    userCounter = 0;
+    postCounter = 0;
+    runningState = _RS_IDLE;
 }
 
 void MainWindow::sendNetworkRequest(const char * urlString)

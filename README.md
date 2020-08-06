@@ -12,7 +12,8 @@ This is a simple aplication made in Qt framework that check users' posts, using 
 ### How to compile it
 
 * It is needed to install Qt **5.15.0** because of functions like `setTransferTimeout()` that were implemented in this version.
-A set of commands below sumarize the IDE's installation, and follow the wizard to complete it.
+
+The simplest way to compile it is using Qt Creator. Commands below sumarizes the IDE's installation, and follow the wizard to complete it.
 ```
 sudo apt-get update
 sudo apt-get install build-essential libgl1-mesa-dev -y
